@@ -11,6 +11,7 @@ O MecaGest informatiza o fluxo de atendimento de uma oficina mecânica de pequen
 ## Documentação
 
 - [Descrição do projeto e requisitos](docs/01-descricao-e-requisitos.md)
+- [Casos de uso: diagrama e descrições textuais](docs/02-casos-de-uso.md)
 
 ## Tecnologias
 
