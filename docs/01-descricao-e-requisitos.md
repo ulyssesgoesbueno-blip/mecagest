@@ -60,7 +60,7 @@ Informatizar o fluxo de atendimento da oficina, desde a entrada do veículo até
 
 **RF-05**
 **Nome:** Elaborar orçamento
-**Descrição:** O sistema deve permitir que o mecânico responsável pela OS registre o diagnóstico e monte o orçamento, adicionando serviços (descrição e valor da mão de obra) e peças do estoque (com quantidade). O sistema deve calcular automaticamente o valor total do orçamento.
+**Descrição:** O sistema deve permitir que o mecânico responsável pela OS registre o diagnóstico e monte o orçamento, adicionando serviços (descrição e valor da mão de obra) e peças do estoque (com quantidade). O sistema deve calcular automaticamente o valor total do orçamento. Ao confirmar o orçamento, a OS passa para o status "Aguardando aprovação".
 
 **RF-06**
 **Nome:** Registrar aprovação do orçamento
