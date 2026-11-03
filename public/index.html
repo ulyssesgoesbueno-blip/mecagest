@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MecaGest</title>
+  <style>
+    :root { --cor: #1f4e79; --fundo: #f3f5f8; --erro: #b3261e; --ok: #1e7b34; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, Arial, sans-serif; background: var(--fundo); color: #1c1c1c; }
+    header { background: var(--cor); color: #fff; padding: 16px 24px; }
+    header h1 { margin: 0; font-size: 22px; }
+    header p { margin: 4px 0 0; opacity: .85; font-size: 14px; }
+    main { max-width: 1100px; margin: 24px auto; padding: 0 16px; display: grid; gap: 20px;
+           grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    section { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    h2 { margin: 0 0 12px; font-size: 17px; color: var(--cor); }
+    label { display: block; font-size: 13px; margin: 8px 0 3px; color: #444; }
+    input { width: 100%; padding: 8px 10px; border: 1px solid #c5ccd6; border-radius: 6px; font-size: 14px; }
+    button { margin-top: 12px; background: var(--cor); color: #fff; border: 0; border-radius: 6px;
+             padding: 9px 14px; font-size: 14px; cursor: pointer; }
+    .msg { margin-top: 10px; font-size: 14px; min-height: 1.2em; }
+    .msg.erro { color: var(--erro); } .msg.ok { color: var(--ok); }
+    .linha { display: flex; gap: 8px; } .linha > div { flex: 1; }
+    #resultado { font-size: 14px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #e3e6eb; }
+    .largo { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MecaGest</h1>
+    <p>Sistema de Gestão de Oficina Mecânica</p>
+  </header>
+  <main>
+    <section>
+      <h2>Cadastrar cliente</h2>
+      <form id="form-cliente">
+        <label for="c-nome">Nome</label><input id="c-nome" name="nome" required>
+        <label for="c-cpf">CPF</label><input id="c-cpf" name="cpf" placeholder="000.000.000-00" required>
+        <label for="c-tel">Telefone</label><input id="c-tel" name="telefone" placeholder="(11) 99999-9999" required>
+        <label for="c-email">E-mail</label><input id="c-email" name="email" type="email">
+        <button type="submit">Cadastrar cliente</button>
+        <div class="msg" id="msg-cliente"></div>
+      </form>
+    </section>
+
+    <section>
+      <h2>Cadastrar veículo</h2>
+      <form id="form-veiculo">
+        <label for="v-cpf">CPF do proprietário</label><input id="v-cpf" name="cpf" required>
+        <div class="linha">
+          <div><label for="v-placa">Placa</label><input id="v-placa" name="placa" placeholder="ABC1D23" required></div>
+          <div><label for="v-ano">Ano</label><input id="v-ano" name="ano" type="number" required></div>
+        </div>
+        <div class="linha">
+          <div><label for="v-marca">Marca</label><input id="v-marca" name="marca" required></div>
+          <div><label for="v-modelo">Modelo</label><input id="v-modelo" name="modelo" required></div>
+        </div>
+        <label for="v-km">Quilometragem</label><input id="v-km" name="quilometragem" type="number" value="0" min="0">
+        <button type="submit">Cadastrar veículo</button>
+        <div class="msg" id="msg-veiculo"></div>
+      </form>
+    </section>
+
+    <section>
+      <h2>Consultar veículo</h2>
+      <form id="form-busca">
+        <label for="b-placa">Placa</label><input id="b-placa" name="placa" required>
+        <button type="submit">Buscar</button>
+      </form>
+      <div class="msg" id="msg-busca"></div>
+      <div id="resultado"></div>
+    </section>
+
+    <section class="largo">
+      <h2>Clientes cadastrados</h2>
+      <table>
+        <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Veículos</th></tr></thead>
+        <tbody id="lista-clientes"><tr><td colspan="4">Nenhum cliente cadastrado.</td></tr></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const dados = (form) => Object.fromEntries(new FormData(form));
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function mostrar(el, texto, ok) {
+      el.textContent = texto;
+      el.className = 'msg ' + (ok ? 'ok' : 'erro');
+    }
+
+    async function api(metodo, url, corpo) {
+      const resp = await fetch(url, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo ? JSON.stringify(corpo) : undefined,
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.erro || 'Erro inesperado.');
+      return json;
+    }
+
+    async function atualizarLista() {
+      const clientes = await api('GET', '/api/clientes');
+      $('lista-clientes').innerHTML = clientes.length
+        ? clientes.map((c) => `<tr><td>${esc(c.nome)}</td><td>${esc(c.cpf)}</td><td>${esc(c.telefone)}</td>
+            <td>${c.veiculos.map((v) => esc(v.placa + ' (' + v.modelo + ')')).join(', ') || '—'}</td></tr>`).join('')
+        : '<tr><td colspan="4">Nenhum cliente cadastrado.</td></tr>';
+    }
+
+    $('form-cliente').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const c = await api('POST', '/api/clientes', dados(e.target));
+        mostrar($('msg-cliente'), `Cliente ${c.nome} cadastrado com sucesso.`, true);
+        e.target.reset();
+        atualizarLista();
+      } catch (err) { mostrar($('msg-cliente'), err.message, false); }
+    });
+
+    $('form-veiculo').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { cpf, ...veiculo } = dados(e.target);
+      try {
+        const v = await api('POST', `/api/clientes/${encodeURIComponent(cpf.replace(/\D/g, ''))}/veiculos`, veiculo);
+        mostrar($('msg-veiculo'), `Veículo ${v.placa} cadastrado com sucesso.`, true);
+        e.target.reset();
+        atualizarLista();
+      } catch (err) { mostrar($('msg-veiculo'), err.message, false); }
+    });
+
+    $('form-busca').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('resultado').innerHTML = '';
+      try {
+        const v = await api('GET', `/api/veiculos/${encodeURIComponent(dados(e.target).placa)}`);
+        mostrar($('msg-busca'), 'Veículo encontrado.', true);
+        $('resultado').innerHTML = `<b>${esc(v.placa)}</b> — ${esc(v.marca)} ${esc(v.modelo)} (${v.ano})<br>
+          Quilometragem: ${v.quilometragem.toLocaleString('pt-BR')} km<br>
+          Proprietário: ${esc(v.proprietario.nome)} — CPF ${esc(v.proprietario.cpf)}`;
+      } catch (err) { mostrar($('msg-busca'), err.message, false); }
+    });
+
+    atualizarLista();
+  </script>
+</body>
+</html>
