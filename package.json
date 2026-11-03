@@ -1,0 +1,25 @@
+{
+  "name": "mecagest",
+  "version": "1.0.0",
+  "description": "Sistema de gestão de oficina mecânica",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ulyssesgoesbueno-blip/mecagest.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ulyssesgoesbueno-blip/mecagest/issues"
+  },
+  "homepage": "https://github.com/ulyssesgoesbueno-blip/mecagest#readme",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
