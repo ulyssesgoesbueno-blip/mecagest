@@ -19,6 +19,40 @@ O MecaGest informatiza o fluxo de atendimento de uma oficina mecânica de pequen
 - Node.js
 - Express
 
+## Funcionalidades implementadas
+
+- Cadastro de cliente com validação de CPF (RF-02, RN-01)
+- Cadastro de veículo vinculado ao cliente (RF-03, RN-02)
+- Consulta de veículo pela placa, com o proprietário (caso de uso Consultar Veículo)
+
 ## Como executar
 
-_Em construção._
+Pré-requisito: [Node.js](https://nodejs.org) versão 18 ou superior.
+
+```bash
+git clone https://github.com/ulyssesgoesbueno-blip/mecagest.git
+cd mecagest
+npm install
+npm start
+```
+
+Depois, abra **http://localhost:3000** no navegador.
+
+Para rodar os testes automatizados das regras de negócio:
+
+```bash
+npm test
+```
+
+## Estrutura do código
+
+```
+src/
+  models/        Classes de domínio (Cliente, Veiculo), conforme o diagrama de classes
+  services/      Regras de negócio dos casos de uso (CadastroService)
+  routes/        Rotas da API REST (Express)
+  app.js         Configuração do Express
+  server.js      Inicialização do servidor
+public/          Tela web (HTML)
+test/            Testes automatizados (node:test)
+```
