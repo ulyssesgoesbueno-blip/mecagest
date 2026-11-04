@@ -24,6 +24,8 @@ O MecaGest informatiza o fluxo de atendimento de uma oficina mecânica de pequen
 - Cadastro de cliente com validação de CPF (RF-02, RN-01)
 - Cadastro de veículo vinculado ao cliente (RF-03, RN-02)
 - Consulta de veículo pela placa, com o proprietário (caso de uso Consultar Veículo)
+- Abertura de ordem de serviço, permitindo só uma OS ativa por veículo (RF-04, RN-03)
+- Elaboração de orçamento com serviços e peças do estoque, com cálculo automático do total (RF-05)
 
 ## Como executar
 
@@ -48,8 +50,9 @@ npm test
 
 ```
 src/
-  models/        Classes de domínio (Cliente, Veiculo), conforme o diagrama de classes
-  services/      Regras de negócio dos casos de uso (CadastroService)
+  models/        Classes de domínio, conforme o diagrama de classes
+  services/      Regras de negócio dos casos de uso
+  dados/         Peças pré-cadastradas para demonstração
   routes/        Rotas da API REST (Express)
   app.js         Configuração do Express
   server.js      Inicialização do servidor
