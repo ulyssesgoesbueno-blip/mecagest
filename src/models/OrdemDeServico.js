@@ -2,6 +2,8 @@
 import StatusOS from './StatusOS.js';
 import ItemServico from './ItemServico.js';
 import ItemPeca from './ItemPeca.js';
+import Pagamento from './Pagamento.js';
+import Notificacao from './Notificacao.js';
 
 const STATUS_INATIVOS = [StatusOS.FINALIZADA, StatusOS.CANCELADA];
 
@@ -16,6 +18,8 @@ export default class OrdemDeServico {
   #veiculo;
   #itensServico = []; // composição 1 ◆— 1..*
   #itensPeca = []; // composição 1 ◆— 0..*
+  #pagamento = null; // composição 1 ◆— 0..1
+  #notificacoes = []; // composição 1 ◆— 0..*
 
   constructor({ numero, veiculo, quilometragemEntrada, problemaRelatado, dataEntrada = new Date() }) {
     if (!problemaRelatado || !problemaRelatado.trim()) {
@@ -57,6 +61,68 @@ export default class OrdemDeServico {
     this.#status = StatusOS.AGUARDANDO_APROVACAO;
   }
 
+  // UC-03: cliente aprovou o orçamento. Retorna as peças que ficaram no estoque mínimo (RF-10).
+  aprovarOrcamento() {
+    this.#exigirStatus(StatusOS.AGUARDANDO_APROVACAO);
+    // RN-05: soma a quantidade pedida de cada peça e confere o estoque antes de aprovar
+    const necessario = new Map();
+    this.#itensPeca.forEach((i) => necessario.set(i.getPeca(), (necessario.get(i.getPeca()) || 0) + i.getQuantidade()));
+    const emFalta = [...necessario].filter(([peca, qtd]) => !peca.temDisponivel(qtd)).map(([peca]) => peca.getDescricao());
+    if (emFalta.length > 0) {
+      throw new Error(`Não é possível aprovar: estoque insuficiente de ${emFalta.join(', ')}.`);
+    }
+    // RF-08 / Baixar Peças do Estoque (<<include>>)
+    necessario.forEach((qtd, peca) => peca.baixarEstoque(qtd));
+    this.#dataDecisao = new Date();
+    this.#status = StatusOS.EM_EXECUCAO;
+    // Emitir Alerta de Estoque Mínimo (<<extend>>)
+    return [...necessario.keys()].filter((peca) => peca.estaAbaixoDoMinimo());
+  }
+
+  // UC-03 fluxo alternativo 4a: cliente recusou
+  recusarOrcamento() {
+    this.#exigirStatus(StatusOS.AGUARDANDO_APROVACAO);
+    this.#dataDecisao = new Date();
+    this.#status = StatusOS.CANCELADA;
+  }
+
+  // Registrar Execução de Serviço — RN-04: só depois da aprovação
+  concluirServico(indice) {
+    if (this.#status !== StatusOS.EM_EXECUCAO) {
+      throw new Error('Só é possível concluir serviços depois que o orçamento for aprovado.');
+    }
+    const item = this.#itensServico[Number(indice)];
+    if (!item) throw new Error('Serviço não encontrado nesta OS.');
+    item.concluir();
+  }
+
+  // UC-04: todos os serviços concluídos -> pronta para retirada
+  finalizar() {
+    this.#exigirStatus(StatusOS.EM_EXECUCAO);
+    const pendentes = this.#itensServico.filter((i) => !i.estaConcluido()).map((i) => i.getDescricao());
+    if (pendentes.length > 0) throw new Error(`Ainda há serviços pendentes: ${pendentes.join(', ')}.`);
+    this.#status = StatusOS.PRONTA_PARA_RETIRADA;
+  }
+
+  criarNotificacao(mensagem) {
+    const notificacao = new Notificacao(mensagem);
+    this.#notificacoes.push(notificacao);
+    return notificacao;
+  }
+
+  // RF-12 / RN-06: a OS só é finalizada após o pagamento do valor total
+  registrarPagamento(valor, forma, dataPagamento = new Date()) {
+    this.#exigirStatus(StatusOS.PRONTA_PARA_RETIRADA);
+    const pagamento = new Pagamento({ valorPago: valor, forma, dataPagamento });
+    if (pagamento.getValorPago() + 0.005 < this.calcularTotal()) {
+      throw new Error('O valor pago é menor que o total da ordem de serviço.');
+    }
+    this.#pagamento = pagamento;
+    this.#status = StatusOS.FINALIZADA;
+  }
+
+  getPagamento() { return this.#pagamento; }
+
   calcularTotalMaoDeObra() {
     return this.#itensServico.reduce((soma, i) => soma + i.getValor(), 0);
   }
@@ -95,6 +161,8 @@ export default class OrdemDeServico {
       totalMaoDeObra: this.calcularTotalMaoDeObra(),
       totalPecas: this.calcularTotalPecas(),
       total: this.calcularTotal(),
+      pagamento: this.#pagamento ? this.#pagamento.toJSON() : null,
+      notificacoes: this.#notificacoes.map((n) => n.toJSON()),
     };
   }
 }
