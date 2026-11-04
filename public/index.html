@@ -21,11 +21,21 @@
              padding: 9px 14px; font-size: 14px; cursor: pointer; }
     .msg { margin-top: 10px; font-size: 14px; min-height: 1.2em; }
     .msg.erro { color: var(--erro); } .msg.ok { color: var(--ok); }
-    .linha { display: flex; gap: 8px; } .linha > div { flex: 1; }
+    .linha { display: flex; gap: 8px; } .linha > div, .linha > form { flex: 1; }
     #resultado { font-size: 14px; line-height: 1.5; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #e3e6eb; }
     .largo { grid-column: 1 / -1; }
+    .duplo { grid-column: span 2; }
+    @media (max-width: 700px) { .duplo { grid-column: 1 / -1; } }
+    select { width: 100%; padding: 8px 10px; border: 1px solid #c5ccd6; border-radius: 6px; font-size: 14px; background: #fff; }
+    .bloco { background: var(--fundo); border-radius: 8px; padding: 12px; }
+    .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #e3e6eb; }
+    .status.ABERTA { background: #dbe9f8; color: #1f4e79; }
+    .status.AGUARDANDO_APROVACAO { background: #fff1c2; color: #7a5a00; }
+    button.link { margin: 0; background: none; color: var(--cor); padding: 0; text-decoration: underline; }
+    tfoot td { font-weight: 600; }
+    #os-info { font-size: 14px; color: #444; margin: 0 0 12px; }
   </style>
 </head>
 <body>
@@ -80,6 +90,57 @@
         <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Veículos</th></tr></thead>
         <tbody id="lista-clientes"><tr><td colspan="4">Nenhum cliente cadastrado.</td></tr></tbody>
       </table>
+    </section>
+
+    <section>
+      <h2>Abrir ordem de serviço</h2>
+      <form id="form-os">
+        <label for="os-placa">Placa do veículo</label><input id="os-placa" name="placa" required>
+        <label for="os-km">Quilometragem atual</label><input id="os-km" name="quilometragem" type="number" min="0">
+        <label for="os-problema">Problema relatado pelo cliente</label><input id="os-problema" name="problemaRelatado" required>
+        <button type="submit">Abrir OS</button>
+        <div class="msg" id="msg-os"></div>
+      </form>
+    </section>
+
+    <section class="duplo">
+      <h2>Ordens de serviço</h2>
+      <table>
+        <thead><tr><th>Nº</th><th>Veículo</th><th>Status</th><th>Total</th><th></th></tr></thead>
+        <tbody id="lista-os"><tr><td colspan="5">Nenhuma ordem de serviço aberta.</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="largo" id="painel-os" hidden>
+      <h2 id="os-titulo"></h2>
+      <p id="os-info"></p>
+      <div id="os-edicao">
+        <div class="linha">
+          <form id="form-servico" class="bloco">
+            <b>Adicionar serviço</b>
+            <label for="s-desc">Descrição</label><input id="s-desc" name="descricao" required>
+            <label for="s-valor">Mão de obra (R$)</label><input id="s-valor" name="valorMaoDeObra" type="number" step="0.01" min="0" required>
+            <button type="submit">Adicionar serviço</button>
+          </form>
+          <form id="form-peca" class="bloco">
+            <b>Adicionar peça do estoque</b>
+            <label for="p-codigo">Peça</label><select id="p-codigo" name="codigo"></select>
+            <label for="p-qtd">Quantidade</label><input id="p-qtd" name="quantidade" type="number" min="1" value="1" required>
+            <button type="submit">Adicionar peça</button>
+          </form>
+        </div>
+      </div>
+      <div class="msg" id="msg-item"></div>
+      <table>
+        <thead><tr><th>Item</th><th>Qtd</th><th>Valor unit.</th><th>Subtotal</th></tr></thead>
+        <tbody id="itens-os"></tbody>
+        <tfoot id="totais-os"></tfoot>
+      </table>
+      <form id="form-orcamento">
+        <label for="o-diag">Diagnóstico do mecânico</label><input id="o-diag" name="diagnostico" required>
+        <button type="submit">Confirmar orçamento</button>
+      </form>
+      <div class="msg" id="msg-orcamento"></div>
     </section>
   </main>
 
@@ -145,7 +206,92 @@
       } catch (err) { mostrar($('msg-busca'), err.message, false); }
     });
 
+    // ---------- Ordens de serviço ----------
+    const reais = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const STATUS = {
+      ABERTA: 'Aberta', AGUARDANDO_APROVACAO: 'Aguardando aprovação', EM_EXECUCAO: 'Em execução',
+      PRONTA_PARA_RETIRADA: 'Pronta para retirada', FINALIZADA: 'Finalizada', CANCELADA: 'Cancelada',
+    };
+    const etiqueta = (s) => `<span class="status ${s}">${STATUS[s] || s}</span>`;
+    let osAtual = null;
+
+    async function carregarPecas() {
+      const pecas = await api('GET', '/api/pecas');
+      $('p-codigo').innerHTML = pecas.map((p) =>
+        `<option value="${esc(p.codigo)}">${esc(p.descricao)} — ${reais(p.precoVenda)} (estoque: ${p.quantidadeEstoque})</option>`).join('');
+    }
+
+    async function atualizarOrdens() {
+      const ordens = await api('GET', '/api/ordens');
+      $('lista-os').innerHTML = ordens.length
+        ? ordens.map((o) => `<tr><td>${o.numero}</td><td>${esc(o.veiculo.placa)} — ${esc(o.veiculo.modelo)}</td>
+            <td>${etiqueta(o.status)}</td><td>${reais(o.total)}</td>
+            <td><button class="link" data-os="${o.numero}">Abrir</button></td></tr>`).join('')
+        : '<tr><td colspan="5">Nenhuma ordem de serviço aberta.</td></tr>';
+    }
+
+    function mostrarOS(o) {
+      osAtual = o.numero;
+      $('painel-os').hidden = false;
+      $('os-titulo').innerHTML = `Ordem de serviço nº ${o.numero} ${etiqueta(o.status)}`;
+      $('os-info').innerHTML = `<b>${esc(o.veiculo.placa)}</b> — ${esc(o.veiculo.marca)} ${esc(o.veiculo.modelo)} ·
+        ${o.quilometragemEntrada.toLocaleString('pt-BR')} km · Problema relatado: ${esc(o.problemaRelatado)}
+        ${o.diagnostico ? '<br>Diagnóstico: ' + esc(o.diagnostico) : ''}`;
+      const servicos = o.servicos.map((s) => `<tr><td>Serviço: ${esc(s.descricao)}</td><td>—</td><td>—</td><td>${reais(s.valor)}</td></tr>`);
+      const pecas = o.pecas.map((p) => `<tr><td>Peça: ${esc(p.descricao)}</td><td>${p.quantidade}</td><td>${reais(p.precoUnitario)}</td><td>${reais(p.subtotal)}</td></tr>`);
+      $('itens-os').innerHTML = [...servicos, ...pecas].join('') || '<tr><td colspan="4">Nenhum item no orçamento.</td></tr>';
+      $('totais-os').innerHTML = `<tr><td colspan="3">Mão de obra</td><td>${reais(o.totalMaoDeObra)}</td></tr>
+        <tr><td colspan="3">Peças</td><td>${reais(o.totalPecas)}</td></tr>
+        <tr><td colspan="3">Total</td><td>${reais(o.total)}</td></tr>`;
+      const editavel = o.status === 'ABERTA';
+      $('os-edicao').hidden = !editavel;
+      $('form-orcamento').hidden = !editavel;
+    }
+
+    async function abrirPainel(numero) {
+      ['msg-item', 'msg-orcamento'].forEach((id) => { $(id).textContent = ''; });
+      mostrarOS(await api('GET', `/api/ordens/${numero}`));
+      $('painel-os').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    $('lista-os').addEventListener('click', (e) => {
+      if (e.target.dataset.os) abrirPainel(e.target.dataset.os);
+    });
+
+    $('form-os').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const o = await api('POST', '/api/ordens', dados(e.target));
+        mostrar($('msg-os'), `OS nº ${o.numero} aberta para o veículo ${o.veiculo.placa}.`, true);
+        e.target.reset();
+        await atualizarOrdens();
+        abrirPainel(o.numero);
+      } catch (err) { mostrar($('msg-os'), err.message, false); }
+    });
+
+    async function acaoOS(form, rota, msgId, textoOk) {
+      try {
+        const o = await api('POST', `/api/ordens/${osAtual}/${rota}`, dados(form));
+        mostrarOS(o);
+        mostrar($(msgId), textoOk, true);
+        form.reset();
+        atualizarOrdens();
+      } catch (err) { mostrar($(msgId), err.message, false); }
+    }
+
+    $('form-servico').addEventListener('submit', (e) => {
+      e.preventDefault(); acaoOS(e.target, 'servicos', 'msg-item', 'Serviço adicionado.');
+    });
+    $('form-peca').addEventListener('submit', (e) => {
+      e.preventDefault(); acaoOS(e.target, 'pecas', 'msg-item', 'Peça adicionada.');
+    });
+    $('form-orcamento').addEventListener('submit', (e) => {
+      e.preventDefault(); acaoOS(e.target, 'orcamento', 'msg-orcamento', 'Orçamento confirmado. Aguardando aprovação do cliente.');
+    });
+
     atualizarLista();
+    carregarPecas();
+    atualizarOrdens();
   </script>
 </body>
 </html>
