@@ -21,6 +21,14 @@ export default function criarRotasOrdens(ordemService, estoqueService) {
   router.post('/ordens/:numero/servicos', acao(200, (req) => ordemService.adicionarServico(req.params.numero, req.body)));
   router.post('/ordens/:numero/pecas', acao(200, (req) => ordemService.adicionarPeca(req.params.numero, req.body)));
   router.post('/ordens/:numero/orcamento', acao(200, (req) => ordemService.elaborarOrcamento(req.params.numero, req.body)));
+  router.post('/ordens/:numero/decisao', acao(200, (req) => {
+    const { ordem, alertasEstoque } = ordemService.registrarDecisao(req.params.numero, req.body);
+    return { ...ordem.toJSON(), alertasEstoque };
+  }));
+  router.post('/ordens/:numero/servicos/:indice/conclusao',
+    acao(200, (req) => ordemService.concluirServico(req.params.numero, req.params.indice)));
+  router.post('/ordens/:numero/finalizacao', acao(200, (req) => ordemService.finalizarOrdem(req.params.numero)));
+  router.post('/ordens/:numero/pagamento', acao(200, (req) => ordemService.registrarPagamento(req.params.numero, req.body)));
 
   return router;
 }
