@@ -26,6 +26,18 @@ O MecaGest informatiza o fluxo de atendimento de uma oficina mecânica de pequen
 - Consulta de veículo pela placa, com o proprietário (caso de uso Consultar Veículo)
 - Abertura de ordem de serviço, permitindo só uma OS ativa por veículo (RF-04, RN-03)
 - Elaboração de orçamento com serviços e peças do estoque, com cálculo automático do total (RF-05)
+- Aprovação ou recusa do orçamento, com baixa automática no estoque e alerta de estoque mínimo (RF-06, RF-08, RF-10, RN-05)
+- Registro da execução dos serviços e finalização da OS (RF-07, RN-04)
+- Notificação ao cliente quando o veículo fica pronto (RF-11). Nesta versão, o Serviço de Mensagens é **simulado**: a mensagem aparece na tela e no terminal do servidor
+- Registro do pagamento, que libera o veículo (RF-12, RN-06)
+- Garantia de 90 dias: o mesmo serviço repetido nesse prazo não cobra mão de obra (RN-07)
+
+## Ainda não implementado
+
+- Autenticação de funcionários e permissões por perfil (RF-01, RN-08)
+- Cadastro e entrada de peças pela tela do gerente (RF-09). Por enquanto, o estoque vem pré-cadastrado
+- Consulta do histórico completo do veículo (RF-13) e relatório de faturamento (RF-14)
+- Gravação em banco de dados: os dados ficam em memória e são apagados ao reiniciar o servidor
 
 ## Como executar
 
@@ -53,6 +65,7 @@ src/
   models/        Classes de domínio, conforme o diagrama de classes
   services/      Regras de negócio dos casos de uso
   dados/         Peças pré-cadastradas para demonstração
+  externo/       Integração com sistemas externos (Serviço de Mensagens, simulado)
   routes/        Rotas da API REST (Express)
   app.js         Configuração do Express
   server.js      Inicialização do servidor
