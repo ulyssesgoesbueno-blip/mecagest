@@ -36,6 +36,14 @@
     button.link { margin: 0; background: none; color: var(--cor); padding: 0; text-decoration: underline; }
     tfoot td { font-weight: 600; }
     #os-info { font-size: 14px; color: #444; margin: 0 0 12px; }
+    .status.EM_EXECUCAO { background: #e6dcf7; color: #4b2a85; }
+    .status.PRONTA_PARA_RETIRADA { background: #d6f0dc; color: #1e7b34; }
+    .status.FINALIZADA { background: #1e7b34; color: #fff; }
+    .status.CANCELADA { background: #f6d7d5; color: #b3261e; }
+    .status.garantia { background: #d6f0dc; color: #1e7b34; }
+    button.secundario { background: #fff; color: var(--erro); border: 1px solid var(--erro); }
+    .aviso { background: var(--fundo); border-left: 4px solid var(--cor); padding: 8px 12px; margin: 10px 0 0; font-size: 14px; }
+    tr.alerta td { color: var(--erro); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -132,7 +140,7 @@
       </div>
       <div class="msg" id="msg-item"></div>
       <table>
-        <thead><tr><th>Item</th><th>Qtd</th><th>Valor unit.</th><th>Subtotal</th></tr></thead>
+        <thead><tr><th>Item</th><th>Qtd</th><th>Valor unit.</th><th>Subtotal</th><th>Situação</th></tr></thead>
         <tbody id="itens-os"></tbody>
         <tfoot id="totais-os"></tfoot>
       </table>
@@ -140,7 +148,34 @@
         <label for="o-diag">Diagnóstico do mecânico</label><input id="o-diag" name="diagnostico" required>
         <button type="submit">Confirmar orçamento</button>
       </form>
+      <div id="acoes-decisao" hidden>
+        <button type="button" id="btn-aprovar">Cliente aprovou</button>
+        <button type="button" id="btn-recusar" class="secundario">Cliente recusou</button>
+      </div>
+      <div id="acoes-execucao" hidden>
+        <button type="button" id="btn-finalizar">Finalizar ordem de serviço</button>
+      </div>
+      <form id="form-pagamento" hidden>
+        <div class="linha">
+          <div><label for="pg-forma">Forma de pagamento</label>
+            <select id="pg-forma" name="forma">
+              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option>
+              <option value="CARTAO_DEBITO">Cartão de débito</option><option value="CARTAO_CREDITO">Cartão de crédito</option>
+            </select></div>
+          <div><label for="pg-valor">Valor pago (R$)</label><input id="pg-valor" name="valor" type="number" step="0.01" min="0" required></div>
+        </div>
+        <button type="submit">Registrar pagamento</button>
+      </form>
       <div class="msg" id="msg-orcamento"></div>
+      <div id="os-mensagens"></div>
+    </section>
+
+    <section class="largo">
+      <h2>Estoque de peças</h2>
+      <table>
+        <thead><tr><th>Código</th><th>Descrição</th><th>Preço</th><th>Em estoque</th><th>Mínimo</th></tr></thead>
+        <tbody id="lista-estoque"></tbody>
+      </table>
     </section>
   </main>
 
@@ -219,6 +254,9 @@
       const pecas = await api('GET', '/api/pecas');
       $('p-codigo').innerHTML = pecas.map((p) =>
         `<option value="${esc(p.codigo)}">${esc(p.descricao)} — ${reais(p.precoVenda)} (estoque: ${p.quantidadeEstoque})</option>`).join('');
+      $('lista-estoque').innerHTML = pecas.map((p) => `<tr class="${p.abaixoDoMinimo ? 'alerta' : ''}">
+        <td>${esc(p.codigo)}</td><td>${esc(p.descricao)}</td><td>${reais(p.precoVenda)}</td>
+        <td>${p.quantidadeEstoque}${p.abaixoDoMinimo ? ' ⚠ estoque mínimo' : ''}</td><td>${p.estoqueMinimo}</td></tr>`).join('');
     }
 
     async function atualizarOrdens() {
@@ -237,15 +275,36 @@
       $('os-info').innerHTML = `<b>${esc(o.veiculo.placa)}</b> — ${esc(o.veiculo.marca)} ${esc(o.veiculo.modelo)} ·
         ${o.quilometragemEntrada.toLocaleString('pt-BR')} km · Problema relatado: ${esc(o.problemaRelatado)}
         ${o.diagnostico ? '<br>Diagnóstico: ' + esc(o.diagnostico) : ''}`;
-      const servicos = o.servicos.map((s) => `<tr><td>Serviço: ${esc(s.descricao)}</td><td>—</td><td>—</td><td>${reais(s.valor)}</td></tr>`);
-      const pecas = o.pecas.map((p) => `<tr><td>Peça: ${esc(p.descricao)}</td><td>${p.quantidade}</td><td>${reais(p.precoUnitario)}</td><td>${reais(p.subtotal)}</td></tr>`);
-      $('itens-os').innerHTML = [...servicos, ...pecas].join('') || '<tr><td colspan="4">Nenhum item no orçamento.</td></tr>';
-      $('totais-os').innerHTML = `<tr><td colspan="3">Mão de obra</td><td>${reais(o.totalMaoDeObra)}</td></tr>
-        <tr><td colspan="3">Peças</td><td>${reais(o.totalPecas)}</td></tr>
-        <tr><td colspan="3">Total</td><td>${reais(o.total)}</td></tr>`;
-      const editavel = o.status === 'ABERTA';
-      $('os-edicao').hidden = !editavel;
-      $('form-orcamento').hidden = !editavel;
+      const situacao = (s, i) => {
+        if (s.concluido) return '✓ Concluído';
+        if (o.status === 'EM_EXECUCAO') return `<button class="link" data-concluir="${i}">Marcar como concluído</button>`;
+        return 'Pendente';
+      };
+      const servicos = o.servicos.map((s, i) => `<tr><td>Serviço: ${esc(s.descricao)}
+        ${s.emGarantia ? ' <span class="status garantia">Garantia</span>' : ''}</td>
+        <td>—</td><td>—</td><td>${reais(s.valor)}</td><td>${situacao(s, i)}</td></tr>`);
+      const pecas = o.pecas.map((p) => `<tr><td>Peça: ${esc(p.descricao)}</td><td>${p.quantidade}</td>
+        <td>${reais(p.precoUnitario)}</td><td>${reais(p.subtotal)}</td><td></td></tr>`);
+      $('itens-os').innerHTML = [...servicos, ...pecas].join('') || '<tr><td colspan="5">Nenhum item no orçamento.</td></tr>';
+      $('totais-os').innerHTML = `<tr><td colspan="3">Mão de obra</td><td>${reais(o.totalMaoDeObra)}</td><td></td></tr>
+        <tr><td colspan="3">Peças</td><td>${reais(o.totalPecas)}</td><td></td></tr>
+        <tr><td colspan="3">Total</td><td>${reais(o.total)}</td><td></td></tr>`;
+      // Cada status libera só as ações permitidas
+      if (o.status !== 'ABERTA') $('msg-item').textContent = '';
+      $('os-edicao').hidden = o.status !== 'ABERTA';
+      $('form-orcamento').hidden = o.status !== 'ABERTA';
+      $('acoes-decisao').hidden = o.status !== 'AGUARDANDO_APROVACAO';
+      $('acoes-execucao').hidden = o.status !== 'EM_EXECUCAO';
+      $('form-pagamento').hidden = o.status !== 'PRONTA_PARA_RETIRADA';
+      $('pg-valor').value = o.total.toFixed(2);
+      const extras = [];
+      o.notificacoes.forEach((n) => extras.push(n.enviada
+        ? `📱 Mensagem enviada ao cliente: “${esc(n.mensagem)}”`
+        : '⚠ Não foi possível enviar a mensagem ao cliente. Ligue para ele avisando que o veículo está pronto.'));
+      if (o.pagamento) {
+        extras.push(`💰 Pagamento de ${reais(o.pagamento.valorPago)} registrado em ${new Date(o.pagamento.dataPagamento).toLocaleString('pt-BR')}. Veículo liberado.`);
+      }
+      $('os-mensagens').innerHTML = extras.map((t) => `<p class="aviso">${t}</p>`).join('');
     }
 
     async function abrirPainel(numero) {
@@ -269,15 +328,32 @@
       } catch (err) { mostrar($('msg-os'), err.message, false); }
     });
 
-    async function acaoOS(form, rota, msgId, textoOk) {
+    async function acaoOS(form, rota, msgId, textoOk, corpo) {
       try {
-        const o = await api('POST', `/api/ordens/${osAtual}/${rota}`, dados(form));
+        const o = await api('POST', `/api/ordens/${osAtual}/${rota}`, corpo || (form ? dados(form) : {}));
         mostrarOS(o);
-        mostrar($(msgId), textoOk, true);
-        form.reset();
+        const alertas = o.alertasEstoque && o.alertasEstoque.length
+          ? ` Atenção, gerente: estoque mínimo atingido para ${o.alertasEstoque.join(', ')}.` : '';
+        mostrar($(msgId), (typeof textoOk === 'function' ? textoOk(o) : textoOk) + alertas, true);
+        if (form) form.reset();
         atualizarOrdens();
+        carregarPecas();
       } catch (err) { mostrar($(msgId), err.message, false); }
     }
+
+    $('btn-aprovar').addEventListener('click', () =>
+      acaoOS(null, 'decisao', 'msg-orcamento', 'Orçamento aprovado. Peças baixadas do estoque.', { aprovado: true }));
+    $('btn-recusar').addEventListener('click', () =>
+      acaoOS(null, 'decisao', 'msg-orcamento', 'Orçamento recusado. Ordem de serviço cancelada.', { aprovado: false }));
+    $('itens-os').addEventListener('click', (e) => {
+      const i = e.target.dataset.concluir;
+      if (i !== undefined) acaoOS(null, `servicos/${i}/conclusao`, 'msg-orcamento', 'Serviço concluído.');
+    });
+    $('btn-finalizar').addEventListener('click', () =>
+      acaoOS(null, 'finalizacao', 'msg-orcamento', 'Ordem de serviço pronta para retirada.'));
+    $('form-pagamento').addEventListener('submit', (e) => {
+      e.preventDefault(); acaoOS(e.target, 'pagamento', 'msg-orcamento', 'Pagamento registrado. Ordem de serviço finalizada.');
+    });
 
     $('form-servico').addEventListener('submit', (e) => {
       e.preventDefault(); acaoOS(e.target, 'servicos', 'msg-item', 'Serviço adicionado.');
