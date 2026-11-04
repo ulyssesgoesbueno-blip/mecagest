@@ -45,7 +45,7 @@ Arquivo editável: [`diagramas/classes.drawio`](diagramas/classes.drawio) (abrir
 ## 4. Como as regras de negócio aparecem nos métodos
 
 - `OrdemDeServico.aprovarOrcamento()` chama `temDisponivel()` de cada peça antes de aprovar (RN-05) e, ao aprovar, chama `baixarEstoque()` (RF-08).
-- `ItemServico.concluir()` só é permitido se o status da OS for `EM_EXECUCAO` (RN-04).
-- `OrdemDeServico.finalizar()` exige que todos os `ItemServico` estejam com `concluido = true`, muda o status para `PRONTA_PARA_RETIRADA` e cria uma `Notificacao` (RF-11).
+- `OrdemDeServico.concluirServico()` só marca um `ItemServico` como concluído se o status da OS for `EM_EXECUCAO` (RN-04).
+- `OrdemDeServico.finalizar()` exige que todos os `ItemServico` estejam com `concluido = true` e muda o status para `PRONTA_PARA_RETIRADA`. Em seguida, `criarNotificacao()` cria a `Notificacao`, e `enviar()` a entrega ao Serviço de Mensagens (RF-11).
 - `OrdemDeServico.registrarPagamento()` cria o `Pagamento` e só então muda o status para `FINALIZADA` (RN-06).
 - `Veiculo.possuiOSAtiva()` é consultado por `Atendente.abrirOrdemDeServico()` para impedir duas OS ativas no mesmo veículo (RN-03).
